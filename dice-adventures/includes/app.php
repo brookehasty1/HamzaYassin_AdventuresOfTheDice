@@ -247,7 +247,6 @@ function layout_header(string $pageTitle = 'Adventures of the Dice', string $act
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css">
-    <script src="assets/js/app.js" defer></script>
 </head>
 <body class="page-<?= e($active) ?>">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -258,9 +257,10 @@ function layout_header(string $pageTitle = 'Adventures of the Dice', string $act
             <span class="brand-die" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
             <span class="brand-text">Dice Adventures</span>
         </a>
-        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+        <input class="nav-check" type="checkbox" id="nav-check" aria-controls="site-nav">
+        <label class="nav-toggle" for="nav-check">
             <span class="sr-only">Menu</span><span aria-hidden="true">☰</span>
-        </button>
+        </label>
         <nav id="site-nav" class="site-nav" aria-label="Main">
             <ul>
                 <?php foreach ($navItems as $key => [$href, $label]): ?>

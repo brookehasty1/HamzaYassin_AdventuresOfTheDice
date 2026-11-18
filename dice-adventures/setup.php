@@ -2,7 +2,7 @@
 /**
  * 2. Game Setup — setup.php
  * Purpose: choose number of players, names and difficulty.
- * Form:    POST action.php (start) (validates, writes session) → game.php
+ * Form:    POST action.php (start) (back-end validate_setup() + new_game()) → game.php
  * Edge case E1: on validation failure action.php (start) redirects back here with
  *               $_SESSION['form_errors'] + $_SESSION['form_old'] (sticky values).
  *               setup.php?error=name previews that state.
@@ -10,7 +10,8 @@
 $pageTitle = 'Game Setup';
 $active    = 'setup';
 require_once __DIR__ . '/includes/app.php';
-page_header($pageTitle, $active);
+$user = require_login();
+layout_header($pageTitle, $active);
 
 $errors = $_SESSION['form_errors'] ?? [];
 $old    = $_SESSION['form_old'] ?? [];
@@ -19,13 +20,13 @@ unset($_SESSION['form_errors'], $_SESSION['form_old']);
 if (isset($_GET['error']) && !$errors) { // preview of edge case E1
     $errors = [
         'player1' => 'Player 1 needs a name.',
-        'player2' => 'Names can only use letters, numbers and spaces (1–15 characters).',
+        'player2' => 'Player 2 name must be between 1 - 20 letters, numbers, spaces, hyphens, or underscores.',
     ];
     $old = ['player_count' => '2', 'player1' => '', 'player2' => '<script>', 'level' => 'standard'];
 }
 
 $count = ($old['player_count'] ?? '2') === '1' ? 1 : 2;
-$p1    = $old['player1'] ?? '';
+$p1    = $old['player1'] ?? $user;
 $p2    = $old['player2'] ?? '';
 $level = level_key($old['level'] ?? ($_GET['level'] ?? 'standard'));
 ?>
@@ -51,6 +52,7 @@ $level = level_key($old['level'] ?? ($_GET['level'] ?? 'standard'));
 <?php endif; ?>
 
 <form class="setup-grid" action="action.php" method="post" novalidate data-setup-form>
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="start">
     <div class="card">
         <fieldset>
@@ -72,10 +74,10 @@ $level = level_key($old['level'] ?? ($_GET['level'] ?? 'standard'));
             <div class="field">
                 <label for="player1"><span class="player-dot player-dot--1" aria-hidden="true"></span>Player 1 name</label>
                 <input class="input" type="text" id="player1" name="player1" value="<?= e($p1) ?>"
-                       maxlength="15" required pattern="[A-Za-z0-9 ]{1,15}" autocomplete="off"
+                       maxlength="20" required autocomplete="off"
                        aria-describedby="player1-help<?= isset($errors['player1']) ? ' player1-error' : '' ?>"
                        <?= isset($errors['player1']) ? 'aria-invalid="true"' : '' ?>>
-                <span class="help" id="player1-help">1–15 letters, numbers or spaces.</span>
+                <span class="help" id="player1-help">1–20 letters, numbers, spaces, - or _.</span>
                 <?php if (isset($errors['player1'])): ?>
                     <span class="error-msg" id="player1-error"><?= e($errors['player1']) ?></span>
                 <?php endif; ?>
@@ -83,7 +85,7 @@ $level = level_key($old['level'] ?? ($_GET['level'] ?? 'standard'));
             <div class="field" data-player2>
                 <label for="player2"><span class="player-dot player-dot--2" aria-hidden="true"></span>Player 2 name</label>
                 <input class="input" type="text" id="player2" name="player2" value="<?= e($p2) ?>"
-                       maxlength="15" pattern="[A-Za-z0-9 ]{1,15}" autocomplete="off"
+                       maxlength="20" autocomplete="off"
                        aria-describedby="player2-help<?= isset($errors['player2']) ? ' player2-error' : '' ?>"
                        <?= isset($errors['player2']) ? 'aria-invalid="true"' : '' ?>
                        <?= $count === 1 ? 'disabled' : '' ?>>
@@ -102,7 +104,7 @@ $level = level_key($old['level'] ?? ($_GET['level'] ?? 'standard'));
                         <input type="radio" name="level" id="level-<?= $key ?>" value="<?= $key ?>" <?= $key === $level ? 'checked' : '' ?>>
                         <label for="level-<?= $key ?>">
                             <strong><?= $lvl['icon'] ?> <?= $lvl['label'] ?></strong>
-                            <span><?= count(BOARDS[$key]['snakes']) ?> snakes · <?= count(BOARDS[$key]['ladders']) ?> ladders</span>
+                            <span><?= count(board_for($key)['snakes']) ?> snakes · <?= count(board_for($key)['ladders']) ?> ladders</span>
                         </label>
                     </div>
                 <?php endforeach; ?>
@@ -121,11 +123,11 @@ $level = level_key($old['level'] ?? ($_GET['level'] ?? 'standard'));
             <div data-preview="<?= $key ?>" <?= $key === $level ? '' : 'hidden' ?>>
                 <div class="preview-stats">
                     <span class="badge badge--<?= $key ?>"><?= $lvl['label'] ?></span>
-                    <span class="badge">🐍 <?= count(BOARDS[$key]['snakes']) ?> snakes</span>
-                    <span class="badge">🪜 <?= count(BOARDS[$key]['ladders']) ?> ladders</span>
-                    <span class="badge">✨ <?= count(EVENT_CELLS) ?> event cells</span>
+                    <span class="badge">🐍 <?= count(board_for($key)['snakes']) ?> snakes</span>
+                    <span class="badge">🪜 <?= count(board_for($key)['ladders']) ?> ladders</span>
+                    <span class="badge">✨ <?= count(board_for($key)['events']) ?> event cells</span>
                 </div>
-                <?php render_board(BOARDS[$key], [], 0, [], null, 'full'); ?>
+                <?php draw_board(board_for($key), [], -1, [], null, 'full'); ?>
             </div>
         <?php endforeach; ?>
         <ul class="board-legend">
@@ -136,4 +138,4 @@ $level = level_key($old['level'] ?? ($_GET['level'] ?? 'standard'));
     </aside>
 </form>
 
-<?php page_footer(); ?>
+<?php layout_footer(); ?>

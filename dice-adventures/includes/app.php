@@ -1,59 +1,41 @@
 <?php
 /**
- * Adventures of the Dice — shared code for every page and for action.php.
+ * Adventures of the Dice — shared front-end code for every page and for action.php.
  *
- *   1. Session start
- *   2. Board configuration + front-end demo data
+ *   1. Back-end connection (Brooke's src/bootstrap.php)
+ *   2. Front-end display data + helpers built on the back-end
  *   3. Board / die rendering
- *   4. Page layout: page_header() and page_footer()
+ *   4. Page layout: layout_header() and layout_footer()
  *
- * Everything under "DEMO STATE" is placeholder data so every screen can be
- * previewed before the back-end (action.php roll / save) is written.
- * When the back-end is ready, replace demo_game() / demo_scores() with reads
- * from $_SESSION and scores.json.
+ * The game rules, boards, sessions, logins, CSRF and leaderboard all come from
+ * ../src. This file only adds what the styled pages need to display them.
+ * (Names differ from src/view.php — draw_board(), layout_header() — so both can load.)
  */
 
-/* ───────────── 1. Session start ───────────── */
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+/* ───────────── 1. Back-end connection ───────────── */
+require_once __DIR__ . '/../../src/bootstrap.php';   // session, e(), csrf, auth, engine, leaderboard
+
+if (PHP_SAPI !== 'cli' && !headers_sent()) {
+    // The back-end's default policy blocks all scripts, inline styles and web fonts.
+    // Allow this front-end's own script, its inline style attributes and Google Fonts.
+    header("Content-Security-Policy: default-src 'self'; script-src 'self'; "
+         . "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+         . "font-src https://fonts.gstatic.com; frame-ancestors 'none'");
 }
 
-/* ───────────── 2. Board configuration + demo data ───────────── */
+/* ───────────── 2. Display data + helpers ───────────── */
 const LEVELS = [
     'beginner' => ['label' => 'Beginner', 'icon' => '🟢', 'blurb' => 'A gentle climb. Good for your first adventure.'],
     'standard' => ['label' => 'Standard', 'icon' => '🟡', 'blurb' => 'Balanced board with a few nasty surprises.'],
     'expert'   => ['label' => 'Expert',   'icon' => '🔴', 'blurb' => 'Nine serpents. Very few ways up.'],
 ];
 
-/* head => tail for snakes, base => top for ladders */
-const BOARDS = [
-    'beginner' => [
-        'snakes'  => [47 => 12, 62 => 19, 87 => 24],
-        'ladders' => [4 => 25, 21 => 39, 50 => 91],
-    ],
-    'standard' => [
-        'snakes'  => [17 => 7, 47 => 12, 54 => 34, 64 => 60, 87 => 24, 98 => 79],
-        'ladders' => [2 => 38, 9 => 31, 28 => 84, 51 => 72, 71 => 91],
-    ],
-    'expert' => [
-        'snakes'  => [16 => 6, 31 => 9, 47 => 12, 49 => 11, 62 => 19, 74 => 53, 87 => 24, 95 => 75, 99 => 78],
-        'ladders' => [4 => 14, 28 => 48, 40 => 59, 63 => 81],
-    ],
-];
-
-/* Event cells used by the AI Narrator (same on every level) */
-const EVENT_CELLS = [
-    15 => ['type' => 'bonus',   'move' => 5,  'msg' => 'Found a shortcut!'],
-    42 => ['type' => 'warp',    'to'   => 58, 'msg' => 'A swirling portal opens!'],
-    67 => ['type' => 'penalty', 'move' => -4, 'msg' => 'Quicksand slows you down.'],
-    83 => ['type' => 'skip',    'msg'  => 'You stop to rest and lose your next turn.'],
-];
-
+/* What each kind of board event does (the events themselves live in src/board_config.php) */
 const EVENT_TYPES = [
-    'bonus'   => ['icon' => '✨', 'label' => 'Bonus',   'desc' => 'Jump forward a few extra cells.'],
-    'penalty' => ['icon' => '🪨', 'label' => 'Penalty', 'desc' => 'Slide back a few cells.'],
-    'skip'    => ['icon' => '⏸️', 'label' => 'Skip',    'desc' => 'Lose your next turn.'],
-    'warp'    => ['icon' => '🌀', 'label' => 'Warp',    'desc' => 'Teleport straight to a target cell.'],
+    'bonus'   => ['icon' => '✨', 'label' => 'Bonus',   'desc' => 'Surge forward a few cells, or earn an extra roll.'],
+    'penalty' => ['icon' => '🌫️', 'label' => 'Penalty', 'desc' => 'Get pushed back a few cells.'],
+    'skip'    => ['icon' => '💤', 'label' => 'Skip',    'desc' => 'Doze off and miss your next turn.'],
+    'warp'    => ['icon' => '🌀', 'label' => 'Warp',    'desc' => 'A portal whisks you to another cell.'],
 ];
 
 function level_key(?string $level): string
@@ -61,92 +43,83 @@ function level_key(?string $level): string
     return array_key_exists((string) $level, LEVELS) ? $level : 'standard';
 }
 
-/** Where a piece ends up after landing on $cell (snake / ladder applied). */
-function resolve_cell(int $cell, array $board): int
+/** The logged-in player's game, or null. */
+function active_game(): ?array
 {
-    $cell = min($cell, 100);
-    return $board['snakes'][$cell] ?? $board['ladders'][$cell] ?? $cell;
+    $user = current_user();
+    return $user === null ? null : current_game($user);
+}
+
+/** True while a game is in progress (enables "Continue Game" / "Back to Game"). */
+function has_game_in_progress(): bool
+{
+    return (active_game()['status'] ?? null) === 'playing';
+}
+
+/** Event types that can appear on a level, e.g. ['bonus' => [15, 83], ...] */
+function event_cells_by_type(array $board): array
+{
+    $byType = [];
+    foreach ($board['events'] as $cell => $pool) {
+        foreach ($pool as $def) {
+            $byType[$def['type']][$cell] = $cell;
+        }
+    }
+    return array_map('array_values', $byType);
 }
 
 /**
  * Probability map: for each fair roll 1–6, where would the piece land?
- * Returns [landing_cell => ['p' => probability, 'rolls' => [..], 'via' => original cell]].
+ * Uses the back-end's resolve_landing(). Position 0 = not on the board yet.
+ * Returns [landing_cell => ['p' => probability, 'rolls' => [..], 'via' => raw cell]].
  */
 function roll_probabilities(int $pos, array $board): array
 {
     $map = [];
     for ($roll = 1; $roll <= 6; $roll++) {
-        $raw = min($pos + $roll, 100);
-        $end = resolve_cell($raw, $board);
+        $res = resolve_landing($board, $pos, $roll);
+        $end = $res['landing'];
         $map[$end]['rolls'][] = $roll;
-        $map[$end]['via'] = $raw;
+        $map[$end]['via'] = min($res['raw'], BOARD_SIZE);
         $map[$end]['p'] = count($map[$end]['rolls']) / 6;
     }
     ksort($map);
     return $map;
 }
 
-function e(string $s): string
+/** Fewest rolls from the start to cell 100 (snakes/ladders only; events are random). Returns the cells visited. */
+function optimal_path(array $board): array
 {
-    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+    $prev  = [0 => null];
+    $queue = [0];
+    while ($queue) {
+        $cell = array_shift($queue);
+        if ($cell === BOARD_SIZE) {
+            break;
+        }
+        for ($roll = 1; $roll <= 6; $roll++) {
+            $next = resolve_landing($board, $cell, $roll)['landing'];
+            if (!array_key_exists($next, $prev)) {
+                $prev[$next] = $cell;
+                $queue[] = $next;
+            }
+        }
+    }
+    $path = [];
+    for ($c = BOARD_SIZE; $c !== null; $c = $prev[$c]) {
+        array_unshift($path, $c);
+    }
+    return $path;
 }
 
-/* ------------------------------------------------------------------ */
-/* DEMO STATE (replace with $_SESSION once the back-end exists)       */
-/* ------------------------------------------------------------------ */
-
-function demo_game(): array
+function mmss(int $seconds): string
 {
-    return [
-        'players'        => ['Sam', 'Ava'],
-        'difficulty'     => 'standard',
-        'positions'      => [43, 31],
-        'current_player' => 0,
-        'turn'           => 7,
-        'last_roll'      => ['player' => 1, 'roll' => 5, 'from' => 4, 'landed' => 9, 'to' => 31],
-        'last_event'     => ['type' => 'ladder', 'text' => '🪜 Ava spots a rope ladder at cell 9 and scrambles all the way up to cell 31!'],
-        'start_time'     => time() - 312,
-    ];
+    return sprintf('%02d:%02d', intdiv($seconds, 60), $seconds % 60);
 }
 
-function demo_recap(): array
+function cell_label(int $pos): string
 {
-    return [
-        'winner'   => 'Sam',
-        'level'    => 'standard',
-        'rolls'    => 19,
-        'time'     => '06:42',
-        'optimal'  => 6,
-        'snakes_hit'   => 3,
-        'turns_lost'   => 4,
-        'ladder_cells' => 61,
-        'timeline' => [
-            ['turn' => 1,  'type' => 'ladder',  'text' => 'Ladder 2 → 38'],
-            ['turn' => 4,  'type' => 'event',   'text' => 'Warp portal 42 → 58'],
-            ['turn' => 6,  'type' => 'snake',   'text' => 'Snake 64 → 60'],
-            ['turn' => 9,  'type' => 'event',   'text' => 'Quicksand 67 → 63'],
-            ['turn' => 11, 'type' => 'ladder',  'text' => 'Ladder 71 → 91'],
-            ['turn' => 13, 'type' => 'snake',   'text' => 'Snake 98 → 79'],
-            ['turn' => 16, 'type' => 'snake',   'text' => 'Snake 87 → 24'],
-            ['turn' => 19, 'type' => 'win',     'text' => 'Reached cell 100 🏆'],
-        ],
-        /* position after each of Sam's turns, for the path chart */
-        'path'    => [0 => 1, 1 => 38, 2 => 41, 3 => 44, 4 => 58, 5 => 61, 6 => 60, 7 => 62, 8 => 65, 9 => 63, 10 => 68, 11 => 91, 12 => 94, 13 => 79, 14 => 82, 15 => 85, 16 => 24, 17 => 28, 18 => 84, 19 => 100],
-        'optimal_path' => [0 => 1, 1 => 2, 2 => 38, 3 => 42, 4 => 58, 5 => 71, 6 => 91, 7 => 97, 8 => 100],
-    ];
-}
-
-/* No Expert rows on purpose: ?level=expert shows the empty state (edge case E3). */
-function demo_scores(): array
-{
-    return [
-        ['id' => 41, 'name' => 'Sam',  'level' => 'standard', 'rolls' => 19, 'time' => '06:42', 'date' => '2026-11-15'],
-        ['id' => 38, 'name' => 'Ava',  'level' => 'standard', 'rolls' => 21, 'time' => '05:40', 'date' => '2026-11-14'],
-        ['id' => 36, 'name' => 'Leo',  'level' => 'beginner', 'rolls' => 14, 'time' => '03:15', 'date' => '2026-11-13'],
-        ['id' => 35, 'name' => 'Maya', 'level' => 'beginner', 'rolls' => 17, 'time' => '04:02', 'date' => '2026-11-12'],
-        ['id' => 33, 'name' => 'Jin',  'level' => 'standard', 'rolls' => 24, 'time' => '07:58', 'date' => '2026-11-10'],
-        ['id' => 30, 'name' => 'Rosa', 'level' => 'beginner', 'rolls' => 22, 'time' => '05:11', 'date' => '2026-11-08'],
-    ];
+    return $pos === 0 ? 'Start' : 'Cell ' . $pos;
 }
 
 /* ───────────── 3. Board / die rendering ───────────── */
@@ -154,14 +127,14 @@ function demo_scores(): array
 /**
  * Render the 100-cell board (serpentine: 1 bottom-left, 100 top-left).
  *
- * @param array      $board     ['snakes' => [...], 'ladders' => [...]]
- * @param array      $positions player index => cell
- * @param int        $current   index of the player whose turn it is
+ * @param array      $board     a level from board_for(): snakes, ladders, events
+ * @param array      $positions player index => cell (0 = start, not drawn)
+ * @param int        $current   index of the player whose turn it is (-1 = nobody)
  * @param array      $players   player names
  * @param array|null $probMap   output of roll_probabilities(), drawn as an overlay
  * @param string     $size      'full' | 'mini'
  */
-function render_board(array $board, array $positions = [], int $current = 0, array $players = [], ?array $probMap = null, string $size = 'full'): void
+function draw_board(array $board, array $positions = [], int $current = 0, array $players = [], ?array $probMap = null, string $size = 'full'): void
 {
     $tails = array_flip($board['snakes']);
     $tops  = array_flip($board['ladders']);
@@ -186,11 +159,10 @@ function render_board(array $board, array $positions = [], int $current = 0, arr
                 $classes[] = 'cell--ladder';
                 $labels[]  = 'ladder up to ' . $board['ladders'][$n];
                 $marker    = '<span class="mark" aria-hidden="true">🪜<small>' . $board['ladders'][$n] . '</small></span>';
-            } elseif (isset(EVENT_CELLS[$n])) {
-                $type      = EVENT_CELLS[$n]['type'];
+            } elseif (isset($board['events'][$n])) {
                 $classes[] = 'cell--event';
-                $labels[]  = EVENT_TYPES[$type]['label'] . ' event';
-                $marker    = '<span class="mark" aria-hidden="true">' . EVENT_TYPES[$type]['icon'] . '</span>';
+                $labels[]  = 'mystery event';
+                $marker    = '<span class="mark" aria-hidden="true">✨</span>';
             } elseif (isset($tails[$n])) {
                 $classes[] = 'cell--tail';
             } elseif (isset($tops[$n])) {
@@ -246,12 +218,13 @@ function render_die(int $value, string $extra = ''): string
 /* ───────────── 4. Page layout ───────────── */
 
 /**
- * Print the <head>, header and navigation, and open <main>.
- * $active: 'home'|'setup'|'game'|'recap'|'leaderboard'|'rules'
+ * Print the <head>, header and navigation, open <main>, and show any flash messages.
+ * $active: 'home'|'setup'|'game'|'recap'|'leaderboard'|'rules'|'login'|'register'
  */
-function page_header(string $pageTitle = 'Adventures of the Dice', string $active = ''): void
+function layout_header(string $pageTitle = 'Adventures of the Dice', string $active = ''): void
 {
-    $navItems  = [
+    $user     = current_user();
+    $navItems = [
         'home'        => ['index.php', 'Home'],
         'setup'       => ['setup.php', 'Setup'],
         'game'        => ['game.php', 'Game'],
@@ -259,6 +232,10 @@ function page_header(string $pageTitle = 'Adventures of the Dice', string $activ
         'leaderboard' => ['leaderboard.php', 'Leaderboard'],
         'rules'       => ['rules.php', 'Rules'],
     ];
+    if ($user === null) {
+        $navItems['login']    = ['login.php', 'Log in'];
+        $navItems['register'] = ['register.php', 'Register'];
+    }
     ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -289,17 +266,32 @@ function page_header(string $pageTitle = 'Adventures of the Dice', string $activ
                 <?php foreach ($navItems as $key => [$href, $label]): ?>
                     <li><a href="<?= $href ?>"<?= $key === $active ? ' aria-current="page"' : '' ?>><?= $label ?></a></li>
                 <?php endforeach; ?>
+                <?php if ($user !== null): ?>
+                    <li>
+                        <form class="nav-form" action="action.php" method="post">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="logout">
+                            <button type="submit">Log out <span class="nav-user">(<?= e($user) ?>)</span></button>
+                        </form>
+                    </li>
+                <?php endif; ?>
             </ul>
         </nav>
     </div>
 </header>
 
 <main id="main" class="wrap" tabindex="-1">
+<?php foreach (take_flash() as $f): $err = $f['type'] === 'error'; ?>
+    <div class="alert alert--<?= $err ? 'error' : 'ok' ?>" role="<?= $err ? 'alert' : 'status' ?>">
+        <span class="alert-icon" aria-hidden="true"><?= $err ? '⚠️' : '✅' ?></span>
+        <div><strong><?= e($f['message']) ?></strong></div>
+    </div>
+<?php endforeach; ?>
 <?php
 }
 
 /** Close <main> and print the footer (with the edge-case preview links). */
-function page_footer(): void
+function layout_footer(): void
 {
     ?>
 </main>

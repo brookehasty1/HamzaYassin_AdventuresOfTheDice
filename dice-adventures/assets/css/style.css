@@ -618,3 +618,20 @@ legend { font-family: var(--font-head); font-weight: 700; font-size: .9rem; marg
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Back-end connection: login pages, log-out button, success alerts ---------- */
+.alert--ok { border-color: var(--green); background: linear-gradient(90deg, rgba(62, 232, 181, .18), rgba(10, 18, 44, .8)); box-shadow: 0 0 20px rgba(62, 232, 181, .2); }
+.nav-form { margin: 0; }
+.nav-form button {
+    display: block; padding: 8px 14px; border: 0; border-radius: 4px; background: none; cursor: pointer;
+    color: var(--ink-2); font: inherit; font-weight: 600; font-size: .86rem;
+    text-transform: uppercase; letter-spacing: 1.5px; transition: color .2s, text-shadow .2s;
+}
+.nav-form button:hover, .nav-form button:focus-visible { color: var(--ink); text-shadow: var(--glow-s); }
+.nav-user { text-transform: none; letter-spacing: .5px; color: var(--cyan); }
+.auth-wrap { max-width: 480px; margin: 0 auto; }
+.auth-switch { text-align: center; margin-top: 14px; }
+.auth-switch a { color: var(--cyan); }
+@media (max-width: 720px) {
+    .nav-form button { padding: 12px 14px; width: 100%; text-align: left; }
+}

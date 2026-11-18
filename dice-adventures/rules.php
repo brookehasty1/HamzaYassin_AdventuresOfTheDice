@@ -2,14 +2,14 @@
 /**
  * 6. Rules & Events — rules.php
  * Purpose: explain the rules and the four event-tile types.
- * Session: R game_active ("Back to Game" vs "Start a Game"). Writes nothing.
+ * Session: R $_SESSION['game'] ("Back to Game" vs "Start a Game"). Writes nothing.
  */
 $pageTitle = 'Rules & Events';
 $active    = 'rules';
 require_once __DIR__ . '/includes/app.php';
-page_header($pageTitle, $active);
+layout_header($pageTitle, $active);
 
-$hasGame = !empty($_SESSION['game_active']);
+$hasGame = has_game_in_progress();
 ?>
 
 <div class="page-head">
@@ -22,11 +22,11 @@ $hasGame = !empty($_SESSION['game_active']);
     <section class="card" aria-labelledby="how-title">
         <h2 id="how-title">How to play</h2>
         <ol class="rule-list">
-            <li>Every piece starts on <strong>cell 1</strong>. Players take turns in order.</li>
-            <li>Press <strong>Roll Dice</strong>. The server rolls a fair die (<code>rand(1, 6)</code>) and moves your piece.</li>
+            <li>Every piece starts <strong>off the board</strong> and enters on its first roll. Players take turns in order.</li>
+            <li>Press <strong>Roll Dice</strong>. The server rolls a fair die (<code>random_int(1, 6)</code>) and moves your piece.</li>
             <li>Land on a <strong>🐍 snake head</strong> and you slide down to its tail.</li>
             <li>Land on a <strong>🪜 ladder base</strong> and you climb to its top.</li>
-            <li>Land on an <strong>event cell</strong> and the AI Narrator triggers a board event (see right).</li>
+            <li>Land on an <strong>event cell</strong> and the AI Narrator draws a random board event (see right). A golden die can even give you an extra roll.</li>
             <li>The <strong>Probability Map</strong> shows where you might land before you roll. It never changes your roll.</li>
             <li>First player to <strong>reach or pass cell 100</strong> wins and goes to the Adventure Recap.</li>
         </ol>
@@ -36,12 +36,16 @@ $hasGame = !empty($_SESSION['game_active']);
         <h2 id="events-title">Event tiles</h2>
         <div class="event-grid">
             <?php foreach (EVENT_TYPES as $type => $t):
-                $cells = array_keys(array_filter(EVENT_CELLS, fn($c) => $c['type'] === $type)); ?>
+                $where = [];
+                foreach (LEVELS as $key => $lvl) {
+                    $cells = event_cells_by_type(board_for($key))[$type] ?? [];
+                    if ($cells) { $where[] = $lvl['label'] . ' ' . implode(', ', $cells); }
+                } ?>
                 <div class="event-tile">
                     <span class="ico" aria-hidden="true"><?= $t['icon'] ?></span>
                     <strong><?= $t['label'] ?></strong>
                     <span><?= $t['desc'] ?></span>
-                    <small>Cell<?= count($cells) > 1 ? 's' : '' ?> <?= implode(', ', $cells) ?></small>
+                    <small>Can appear on: <?= implode(' · ', $where) ?></small>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -55,13 +59,13 @@ $hasGame = !empty($_SESSION['game_active']);
             <thead><tr><th scope="col">Level</th><th scope="col">Snakes</th><th scope="col">Ladders</th><th scope="col">Event cells</th><th scope="col">Longest slide</th></tr></thead>
             <tbody>
                 <?php foreach (LEVELS as $key => $lvl):
-                    $b = BOARDS[$key];
+                    $b = board_for($key);
                     $slides = array_map(fn($h, $t) => $h - $t, array_keys($b['snakes']), $b['snakes']); ?>
                     <tr>
                         <td><span class="badge badge--<?= $key ?>"><?= $lvl['label'] ?></span></td>
                         <td><?= count($b['snakes']) ?></td>
                         <td><?= count($b['ladders']) ?></td>
-                        <td><?= count(EVENT_CELLS) ?></td>
+                        <td><?= count($b['events']) ?></td>
                         <td><?= max($slides) ?> cells</td>
                     </tr>
                 <?php endforeach; ?>
@@ -78,4 +82,4 @@ $hasGame = !empty($_SESSION['game_active']);
     <?php endif; ?>
 </div>
 
-<?php page_footer(); ?>
+<?php layout_footer(); ?>

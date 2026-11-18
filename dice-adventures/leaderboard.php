@@ -2,24 +2,24 @@
 /**
  * 5. Leaderboard — leaderboard.php
  * Purpose: ranked results (fewest rolls, then fastest time).
- * Session: R last_score_id (highlights your row)
+ * Session: R $_SESSION['leaderboard'] (back-end record_score()), last_score (highlights your row)
  * Filter:  GET leaderboard.php?level=beginner|standard|expert (unknown value → All)
- * Edge case E3: no rows for the filter (or no scores file) → empty state.
+ * Edge case E3: no rows for the filter → empty state.
  */
 $pageTitle = 'Leaderboard';
 $active    = 'leaderboard';
 require_once __DIR__ . '/includes/app.php';
-page_header($pageTitle, $active);
+require_login();
 
-$filter = $_GET['level'] ?? 'all';
-if (!array_key_exists($filter, LEVELS)) {
-    $filter = 'all';
+[$level, $notice] = leaderboard_filter($_GET);   // unknown level → all levels + notice
+if ($notice !== null) {
+    flash('error', $notice);
 }
-$youId = $_SESSION['last_score_id'] ?? 41;
+$filter = $level ?? 'all';
+$you    = $_SESSION['last_score'] ?? null;        // [name, finished_at, owner]
 
-$rows = array_values(array_filter(demo_scores(), fn($s) => $filter === 'all' || $s['level'] === $filter));
-usort($rows, fn($a, $b) => [$a['rolls'], $a['time']] <=> [$b['rolls'], $b['time']]);
-$rows   = array_slice($rows, 0, 10);
+$rows   = array_slice(ranked_leaderboard($level), 0, 10);
+layout_header($pageTitle, $active);
 $medals = ['🥇', '🥈', '🥉'];
 ?>
 
@@ -41,7 +41,7 @@ $medals = ['🥇', '🥈', '🥉'];
         <?= render_die(1) ?>
         <h2 id="empty-title">No <?= $lvl ? $lvl['label'] . ' ' : '' ?>games yet</h2>
         <p>
-            <?= $filter === 'expert' ? 'Be the first to conquer all ' . count(BOARDS['expert']['snakes']) . ' snakes!' : 'Finish a game to claim the top spot.' ?>
+            <?= $filter === 'expert' ? 'Be the first to conquer all ' . count(board_for('expert')['snakes']) . ' snakes!' : 'Finish a game to claim the top spot.' ?>
         </p>
         <a class="btn btn--primary" href="setup.php<?= $lvl ? '?level=' . $filter : '' ?>">
             Start <?= $lvl ? 'an ' . $lvl['label'] : 'a' ?> Game
@@ -56,13 +56,13 @@ $medals = ['🥇', '🥈', '🥉'];
             </thead>
             <tbody>
                 <?php foreach ($rows as $i => $s): ?>
-                    <tr class="<?= $s['id'] === $youId ? 'is-you' : '' ?>">
+                    <tr class="<?= $you === [$s['name'], $s['finished_at'], $s['owner']] ? 'is-you' : '' ?>">
                         <td class="rank"><?= isset($medals[$i]) ? '<span class="medal" aria-hidden="true">' . $medals[$i] . '</span> ' : '' ?><?= $i + 1 ?></td>
                         <td class="player"><?= e($s['name']) ?></td>
                         <td><span class="badge badge--<?= $s['level'] ?>"><?= LEVELS[$s['level']]['label'] ?></span></td>
                         <td><?= $s['rolls'] ?></td>
-                        <td><?= $s['time'] ?></td>
-                        <td><time datetime="<?= $s['date'] ?>"><?= date('M j', strtotime($s['date'])) ?></time></td>
+                        <td><?= mmss($s['seconds']) ?></td>
+                        <td><time datetime="<?= date('Y-m-d', $s['finished_at']) ?>"><?= date('M j', $s['finished_at']) ?></time></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -73,4 +73,4 @@ $medals = ['🥇', '🥈', '🥉'];
     </div>
 <?php endif; ?>
 
-<?php page_footer(); ?>
+<?php layout_footer(); ?>

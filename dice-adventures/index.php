@@ -2,17 +2,16 @@
 /**
  * 1. Home — index.php
  * Purpose: landing page; start or resume a game.
- * Session: R game_active (enables "Continue Game")
+ * Session: R $_SESSION['game'] (enables "Continue Game")
  * Edge case E2: index.php?expired=1 shows the "session expired" banner.
  */
 $pageTitle = 'Home';
 $active    = 'home';
 require_once __DIR__ . '/includes/app.php';
-page_header($pageTitle, $active);
+layout_header($pageTitle, $active);
 
 $expired    = isset($_GET['expired']);
-$hasGame    = !$expired && !empty($_SESSION['game_active']);
-$demo       = demo_game();
+$hasGame    = !$expired && has_game_in_progress();
 ?>
 
 <?php if ($expired): ?>
@@ -44,7 +43,7 @@ $demo       = demo_game();
         </div>
     </div>
     <div class="hero-art" aria-hidden="true">
-        <?php render_board(BOARDS['standard'], $demo['positions'], 0, $demo['players'], null, 'mini'); ?>
+        <?php draw_board(board_for('standard'), [43, 31], 0, ['P1', 'P2'], null, 'mini'); // decorative ?>
         <?= render_die(3) ?>
         <?= render_die(5) ?>
     </div>
@@ -64,8 +63,8 @@ $demo       = demo_game();
         <article class="level-card level-card--<?= $key ?>">
             <h3><?= $lvl['icon'] ?> <?= $lvl['label'] ?></h3>
             <div class="level-stats">
-                <span>🐍 <?= count(BOARDS[$key]['snakes']) ?> snakes</span>
-                <span>🪜 <?= count(BOARDS[$key]['ladders']) ?> ladders</span>
+                <span>🐍 <?= count(board_for($key)['snakes']) ?> snakes</span>
+                <span>🪜 <?= count(board_for($key)['ladders']) ?> ladders</span>
             </div>
             <p><?= e($lvl['blurb']) ?></p>
             <a class="btn btn--ghost" href="setup.php?level=<?= $key ?>">Play <?= $lvl['label'] ?></a>
@@ -73,4 +72,4 @@ $demo       = demo_game();
     <?php endforeach; ?>
 </div>
 
-<?php page_footer(); ?>
+<?php layout_footer(); ?>

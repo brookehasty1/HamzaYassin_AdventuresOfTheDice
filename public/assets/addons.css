@@ -1,0 +1,31 @@
+/* Small additions for the PHP build. Loaded after style.css.
+   The site sends script-src 'none', so everything here is pure CSS. */
+
+/* No JS = no hamburger. Keep the nav visible on small screens instead. */
+.nav-toggle { display: none !important; }
+@media (max-width: 720px) {
+    .header-inner { flex-wrap: wrap; padding-block: 8px; }
+    .brand-text { font-size: .95rem; letter-spacing: 1.5px; }
+    .site-nav { display: block; position: static; background: none; border: 0; margin-left: 0; width: 100%; }
+    .site-nav ul { flex-direction: row; flex-wrap: wrap; padding: 0; }
+    .site-nav a { padding: 8px 10px; }
+    .nav-form button { width: auto; padding: 8px 10px; }
+}
+
+/* Start tokens above the board */
+.start-line { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+
+/* Progress bars use an inline width */
+.player-row .progress span { width: 0; }
+
+/* Setup form pieces */
+.choice-group + .field, .choice-group + .choice-group { margin-top: 12px; }
+.setup-grid fieldset + fieldset { margin-top: 8px; }
+.hero h1 span { color: transparent; }
+
+/* Player 2 name: shown only when "2 players" is selected (pure CSS, no JS).
+   Browsers without :has() simply keep the field visible. */
+@supports selector(:has(*)) {
+    .setup-grid fieldset .field--p2 { display: none; }
+    .setup-grid fieldset:has(#count-2:checked) .field--p2 { display: block; }
+}

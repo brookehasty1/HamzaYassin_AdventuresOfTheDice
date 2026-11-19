@@ -160,6 +160,9 @@ fix PHP code, adapt the pages to our CSS, give the file structure and function n
 feature described above is our own rule-based PHP code and does not call any AI service.
 
 Names: Hamza Yasin, Brooke Hasty
+
 Course: Website Development 4370
+
 Codd Link: https://codd.cs.gsu.edu/~bhasty1/web/PW/PW2/public/register.php 
+
 Git Link: https://github.com/brookehasty1/HamzaYassin_AdventuresOfTheDice.git 
